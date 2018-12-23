@@ -1,0 +1,226 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ *
+ * @author mide_
+ * Reference: <a href="https://algs4.cs.princeton.edu/code/edu/princeton/cs/algs4/BTree.java.html">Section 6.2</a>
+ * Reference: Introduction to Algorithms, 3rd Edition by Charles E. Leiserson, Clifford Stein, Ronald Rivest, and Thomas H. Cormen
+ *
+ * Implementation of a non generic B-Tree that take a pair of Key as String and Value as a list of values.
+ */
+
+public class BTree {
+
+    // max children per B-tree node = MAX-1
+    // (must be even and greater than 2)
+    private static final int MAX = 4;
+
+    private Node root;
+    private int bTreeHeight;
+    private int numKeys;  //number of key-value pairs in the B-tree
+
+    // helper B-tree node data type
+    private static final class Node {
+
+        private int numChildren;
+        private final Entry[] children = new Entry[MAX];
+
+        private Node(int k) {
+            numChildren = k;
+        }
+    }
+
+    // internal nodes: only use key and next
+    // external nodes: only use key and value
+    private static class Entry {
+
+        private Comparable key;
+        private final Object val;
+        private Node next;
+
+        public Entry(Comparable key, List<String> value, Node next) {
+            this.key = key;
+            this.val = value;
+            this.next = next;
+        }
+    }
+
+    //Initializes an empty B-tree.
+    public BTree() {
+        root = new Node(0);
+    }
+
+    //Returns the number of key-value pairs in this symbol table.
+    public int size() {
+        return numKeys;
+    }
+
+    //Returns the height of this B-tree
+    public int height() {
+        return bTreeHeight;
+    }
+
+    //Returns the list of values or value associated with the given key.
+    public List<String> get(String key) {
+        if (key == null) {
+            throw new IllegalArgumentException("argument value to get() is null");
+        }
+        return search(root, key, bTreeHeight);
+    }
+
+    private List<String> search(Node searchNode, String key, int ht) {
+        Entry[] searchNodeChildren = searchNode.children;
+
+        // external node
+        if (ht == 0) {
+            for (int j = 0; j < searchNode.numChildren; j++) {
+                if (stringsEqual(key, searchNodeChildren[j].key)) {
+                    return (List<String>) searchNodeChildren[j].val;
+                }
+            }
+            // internal node
+        } else {
+            for (int searchPosition = 0; searchPosition < searchNode.numChildren; searchPosition++) {
+                if (searchPosition + 1 == searchNode.numChildren || stringLessThan(key, searchNodeChildren[searchPosition + 1].key)) {
+                    return search(searchNodeChildren[searchPosition].next, key, ht - 1);
+                }
+            }
+        }
+        return null;
+    }
+
+    //Inserts the key-value pair into the symbol table, if key == null, it creates a new key-value pair.
+    //if key is already in tree, it get(key) and adds it to a list associated with the key.
+    public void put(String key, String value) {
+        //checks if key does not exist in tree.
+        if (get(key) == null) {
+
+            List<String> list = new ArrayList<>();
+            list.add(value);
+
+            //if key is null, creates key and adds value to a new list
+            if (key == null) {
+                throw new IllegalArgumentException("argument key to put() is null");
+            }
+            Node insertionResultNode = insert(root, key, list, bTreeHeight);
+            numKeys++;
+            if (insertionResultNode == null) {
+                return;
+            }
+
+            Node newRoot = new Node(2);
+            newRoot.children[0] = new Entry(root.children[0].key, list, root);
+            newRoot.children[1] = new Entry(insertionResultNode.children[0].key, list, insertionResultNode);
+
+            root = newRoot;
+            bTreeHeight++;
+
+            //gets the key and add new value to list of values.
+        } else {
+            get(key).add(value);
+        }
+    }
+
+    private Node insert(Node insertionNode, String key, List<String> value, int treeHeight) {
+        int insertionPosition = 0;
+
+        Entry newEntry = new Entry(key, value, null);
+
+        // external node
+        if (treeHeight == 0) {
+            for (insertionPosition = 0; insertionPosition < insertionNode.numChildren; insertionPosition++) {
+                if (stringLessThan(key, insertionNode.children[insertionPosition].key)) {
+                    break;
+                }
+            }
+            // internal node
+        } else if (treeHeight > 0) {
+            for (insertionPosition = 0; insertionPosition < insertionNode.numChildren; insertionPosition++) {
+                if ((insertionPosition + 1 == insertionNode.numChildren
+                        || stringLessThan(key, insertionNode.children[insertionPosition + 1].key))) {
+
+                    Node insertionResultNode = insert(insertionNode.children[insertionPosition++].next, key, value, treeHeight - 1);
+
+                    if (insertionResultNode == null) {
+                        return null;
+                    }
+                    newEntry.key = insertionResultNode.children[0].key;
+                    newEntry.next = insertionResultNode;
+                    break;
+                }
+            }
+        }
+        for (int i = insertionNode.numChildren; i > insertionPosition; i--) {
+            insertionNode.children[i] = insertionNode.children[i - 1];
+        }
+        insertionNode.children[insertionPosition] = newEntry;
+        insertionNode.numChildren++;
+        if (insertionNode.numChildren < MAX) {
+            return null;
+        } else {
+            return splitNodeWhenNeeded(insertionNode);
+        }
+    }
+
+    // split node when needed
+    private Node splitNodeWhenNeeded(Node insertionNode) {
+        if (insertionNode.numChildren < MAX) {
+            return null;
+        } else {
+            return splitInsertion(insertionNode);
+        }
+    }
+
+    // split node in half
+    private Node splitInsertion(Node head) {
+        Node newNode = new Node(MAX / 2);
+        head.numChildren = MAX / 2;
+        for (int j = 0; j < MAX / 2; j++) {
+            newNode.children[j] = head.children[MAX / 2 + j];
+        }
+        return newNode;
+    }
+
+    //Returns a string representation of this B-tree form the root, height
+    public String toString() {
+        return toString(root, bTreeHeight, "") + "\n";
+    }
+
+    //Returns a string representation of this B-tree
+    private String toString(Node h, int ht, String indent) {
+        String s = "";
+        Entry[] children = h.children;
+
+        if (ht == 0) {
+            for (int j = 0; j < h.numChildren; j++) {
+                s += indent + children[j].key + " " + children[j].val + "\n";
+            }
+        } else {
+            for (int j = 0; j < h.numChildren; j++) {
+                if (j > 0) {
+                    s += indent + "(" + children[j].key + ")\n";
+                }
+                s += toString(children[j].next, ht - 1, indent + "     ");
+            }
+        }
+        return s;
+    }
+
+    // comparison functions
+    public static boolean stringLessThan(Comparable k1, Comparable k2) {
+        return k1.compareTo(k2) < 0;
+    }
+
+    // comparison functions
+    public static boolean stringsEqual(Comparable k1, Comparable k2) {
+        return k1.compareTo(k2) == 0;
+    }
+
+}
